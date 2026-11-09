@@ -15,6 +15,8 @@ read replica, replication lag, and rows replicated from Region 1.
 
 Design details, diagrams, security controls and costs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+**Presenting?** Follow [docs/PRESENTATION-RUNBOOK.md](docs/PRESENTATION-RUNBOOK.md): deploy timeline, pre-flight checks, a step-by-step talk track for the live DR drill, likely questions, and what to do if something breaks.
+
 ---
 
 ## 1. Prerequisites
