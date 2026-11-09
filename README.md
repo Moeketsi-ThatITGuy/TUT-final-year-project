@@ -15,6 +15,9 @@ read replica, replication lag, and rows replicated from Region 1.
 
 Design details, diagrams, security controls and costs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+**Diagram generator input:** [docs/ARCHITECTURE-DIAGRAM-SPEC.md](docs/ARCHITECTURE-DIAGRAM-SPEC.md) (every node, connection, CIDR and port).
+**On-prem primary with AWS as DR, and automatic DB promotion:** [docs/HYBRID-ONPREM-PRIMARY-DR.md](docs/HYBRID-ONPREM-PRIMARY-DR.md).
+
 **Presenting?** Follow [docs/PRESENTATION-RUNBOOK.md](docs/PRESENTATION-RUNBOOK.md): deploy timeline, pre-flight checks, a step-by-step talk track for the live DR drill, likely questions, and what to do if something breaks.
 
 ---
