@@ -124,13 +124,19 @@ TIME (UTC)  DNS ANSWER      ALB                   APP REGION   DB (region / role
 | 6. Recovery | `scripts/restore.sh` | Route 53 fails back to Region 1 automatically |
 | 7. (optional, one-way) | `scripts/promote-replica.sh` | Backup DB becomes writable PRIMARY. Do this last, then destroy |
 
-**Browsing by name:** if you **own** the domain (delegate NS to `route53_name_servers`), just
-open `http://app.<domain>`. If you don't, either use `check-dns.sh`, or point your laptop at
-whichever IP Route 53 returns:
+**Browsing by name (`http://app.univen-dr-demo.com`):** if you **own** the domain (delegate NS to
+`route53_name_servers`, or set `existing_hosted_zone_id`), just open `http://app.<domain>`.
 
-```bash
-dig +short @$(terraform output -json route53_name_servers | jq -r '.[0]') app.univen-dr-demo.com
-```
+If you don't own it, point **your laptop only** at Route 53 for that one name. Run this after every
+deploy, because the name servers change:
+
+| OS | Command |
+|---|---|
+| macOS | `scripts/local-dns.sh on` (uses `/etc/resolver`; `status` and `off` too) |
+| Windows (PowerShell as Administrator) | `powershell -ExecutionPolicy Bypass -File scripts\local-dns.ps1 on` (uses an NRPT rule; `status` and `off` too) |
+
+Then the browser follows the live failover. Don't use the hosts file for this: it pins one IP, so
+the failover never shows. See `docs/PRESENTATION-RUNBOOK.md` for browser DNS-cache tips.
 
 ## 6. Tear down (do this when the demo ends)
 
@@ -176,7 +182,7 @@ The same checks run in GitHub Actions (`.github/workflows/terraform-ci.yml`) on 
 │   ├── compute/       # SGs, IAM, web + app EC2, ALB, Apache/PHP site
 │   ├── database/      # RDS primary OR cross-region replica
 │   └── vpn/           # VGW, 2x CGW, 2x VPN connection (BGP)
-├── scripts/           # smoke-test, check-dns, simulate-failure, restore, promote-replica
+├── scripts/           # smoke-test, check-dns, simulate-failure, restore, promote-replica, local-dns (.sh mac / .ps1 windows)
 ├── tests/             # terraform test files (mock providers)
 └── docs/ARCHITECTURE.md
 ```

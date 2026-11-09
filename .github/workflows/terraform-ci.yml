@@ -34,3 +34,14 @@ jobs:
 
       - name: shell syntax check
         run: for f in scripts/*.sh; do bash -n "$f"; done
+
+      - name: PowerShell syntax check
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in Get-ChildItem scripts/*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | ForEach-Object { Write-Error "$($f.Name): $($_.Message)" }; $failed = $true }
+          }
+          if ($failed) { exit 1 }
