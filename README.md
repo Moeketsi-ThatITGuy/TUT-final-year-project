@@ -133,6 +133,7 @@ deploy, because the name servers change:
 | OS | Command |
 |---|---|
 | macOS | `scripts/local-dns.sh on` (uses `/etc/resolver`; `status` and `off` too) |
+| Linux (systemd-resolved: Ubuntu, Fedora, Debian 12+...) | `scripts/local-dns.sh on` (uses a `resolved.conf.d` drop-in; `status` and `off` too) |
 | Windows (PowerShell as Administrator) | `powershell -ExecutionPolicy Bypass -File scripts\local-dns.ps1 on` (uses an NRPT rule; `status` and `off` too) |
 
 Then the browser follows the live failover. Don't use the hosts file for this: it pins one IP, so
@@ -182,7 +183,7 @@ The same checks run in GitHub Actions (`.github/workflows/terraform-ci.yml`) on 
 │   ├── compute/       # SGs, IAM, web + app EC2, ALB, Apache/PHP site
 │   ├── database/      # RDS primary OR cross-region replica
 │   └── vpn/           # VGW, 2x CGW, 2x VPN connection (BGP)
-├── scripts/           # smoke-test, check-dns, simulate-failure, restore, promote-replica, local-dns (.sh mac / .ps1 windows)
+├── scripts/           # smoke-test, check-dns, simulate-failure, restore, promote-replica, local-dns (.sh mac+linux / .ps1 windows)
 ├── tests/             # terraform test files (mock providers)
 └── docs/ARCHITECTURE.md
 ```

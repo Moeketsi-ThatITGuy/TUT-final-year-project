@@ -52,8 +52,10 @@ We don't own `univen-dr-demo.com`, so the public internet can't look it up. Run 
 
 | OS | Turn on | Check | Turn off (after the demo) |
 |---|---|---|---|
-| macOS | `scripts/local-dns.sh on` (asks for your password) | `scripts/local-dns.sh status` | `scripts/local-dns.sh off` |
+| macOS / Linux | `scripts/local-dns.sh on` (asks for your password) | `scripts/local-dns.sh status` | `scripts/local-dns.sh off` |
 | Windows (PowerShell **as Administrator**) | `powershell -ExecutionPolicy Bypass -File scripts\local-dns.ps1 on` | `... local-dns.ps1 status` | `... local-dns.ps1 off` |
+
+Linux needs `systemd-resolved`, the default on Ubuntu, Fedora, Debian 12+ and Mint 21+. The script checks for it and tells you if your system is different.
 
 `status` should show **System lookup:** with two IPs. Then open `http://app.univen-dr-demo.com`; it should show green "REGION 1 - PRIMARY".
 
@@ -106,7 +108,7 @@ terraform destroy              # ~15 min, type "yes"
 Run it **from the same folder that deployed** (it holds the state file).
 
 Then remove the laptop DNS override:
-- **macOS:** `scripts/local-dns.sh off`
+- **macOS / Linux:** `scripts/local-dns.sh off`
 - **Windows** (PowerShell as Administrator): `powershell -ExecutionPolicy Bypass -File scripts\local-dns.ps1 off`
 
 ## Likely questions

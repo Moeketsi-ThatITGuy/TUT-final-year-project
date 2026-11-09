@@ -45,3 +45,55 @@ jobs:
             if ($errs) { $errs | ForEach-Object { Write-Error "$($f.Name): $($_.Message)" }; $failed = $true }
           }
           if ($failed) { exit 1 }
+
+  # Real test of scripts/local-dns.sh on Linux (systemd-resolved), no AWS needed.
+  # Uses example.com in place of the failover name:
+  #   1. route it to an unreachable TEST-NET server -> lookup must FAIL (routing applied)
+  #   2. route it to its real authoritative servers -> lookup must SUCCEED
+  #   3. other names must keep resolving while the override is on
+  #   4. "off" must remove the drop-in and restore normal resolution
+  local-dns-linux:
+    name: local-dns.sh on Linux (systemd-resolved)
+    runs-on: ubuntu-latest
+    env:
+      LOCAL_DNS_FQDN: example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolver info
+        run: |
+          cat /etc/resolv.conf
+          resolvectl status | head -20
+
+      - name: 1. Routing is applied (unreachable server -> lookup fails)
+        env:
+          LOCAL_DNS_NAMESERVERS: "192.0.2.1"
+        run: |
+          scripts/local-dns.sh on
+          if timeout 30 getent ahostsv4 example.com; then
+            echo "::error::example.com still resolved, so the override was not applied"; exit 1
+          fi
+          echo "OK: example.com is routed to the override server"
+          timeout 30 getent ahostsv4 github.com >/dev/null || { echo "::error::other DNS broke"; exit 1; }
+          echo "OK: other names still resolve"
+
+      - name: 2. Lookup via authoritative servers succeeds; other names still resolve
+        run: |
+          scripts/local-dns.sh off   # undo step 1 so we can look up the real name servers
+          NS_IPS=$(for ns in $(dig +short NS example.com); do dig +short "$ns" A | head -1; done | tr '\n' ' ')
+          echo "example.com authoritative servers: $NS_IPS"
+          LOCAL_DNS_NAMESERVERS="$NS_IPS" scripts/local-dns.sh on
+          timeout 30 getent ahostsv4 example.com || { echo "::error::lookup via override failed"; exit 1; }
+          for n in github.com api.github.com amazon.com; do
+            timeout 30 getent ahostsv4 "$n" >/dev/null || { echo "::error::$n failed with override on"; exit 1; }
+          done
+          echo "OK: override answers example.com and other names still resolve"
+          scripts/local-dns.sh status
+
+      - name: 3. off removes the override
+        run: |
+          scripts/local-dns.sh off
+          test ! -e /etc/systemd/resolved.conf.d/univen-local-dns.conf
+          timeout 30 getent ahostsv4 example.com >/dev/null
+          scripts/local-dns.sh status | grep -q "Override:      OFF"
+          echo "OK: override removed, normal DNS restored"
