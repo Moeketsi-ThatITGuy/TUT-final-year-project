@@ -1,0 +1,29 @@
+# Copy to terraform.tfvars and edit. Every value here is optional:
+# with no tfvars at all the stack deploys with sensible defaults.
+
+# project_name     = "univen"
+# aws_profile      = "univen-demo"      # or export AWS_PROFILE instead
+
+# primary_region   = "us-east-1"        # "Region 1"
+# secondary_region = "us-west-2"        # "Backup region"
+
+# Who may open the website. Empty = auto-detect the IP of the machine running
+# Terraform. Add your audience's public network(s) if others need to browse.
+# allowed_cidrs = ["203.0.113.10/32", "198.51.100.0/24"]
+
+# DNS. If you own a domain, set domain_name to it and either let Terraform
+# create the zone (then delegate NS at your registrar) or reuse a zone:
+# domain_name             = "univen-dr-demo.com"
+# existing_hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# Cost levers
+# db_multi_az = false                   # skip the Multi-AZ standby
+# enable_vpn  = false                   # skip VGW + 2 VPN connections
+
+# On-prem edge router public IPs (Packet Tracer edge routers 1 and 2)
+# customer_gateway_ips = {
+#   isp-a = "203.0.113.10"
+#   isp-b = "198.51.100.10"
+# }
+
+# alert_email = "you@example.com"       # CloudWatch alarm notifications

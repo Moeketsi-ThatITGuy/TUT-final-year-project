@@ -1,0 +1,48 @@
+#!/bin/bash
+# Web tier bootstrap (Amazon Linux 2023)
+#   - Apache serves the static site (index.html, /health, /whoami.json)
+#   - /api/* is reverse-proxied to the two app servers in the private subnets
+set -euxo pipefail
+
+dnf install -y httpd
+
+# --- Instance identity via IMDSv2 --------------------------------------------
+TOKEN=$(curl -sS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md() { curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+AZ=$(md placement/availability-zone)
+IID=$(md instance-id)
+REGION=$(md placement/region)
+
+# --- Site content ---------------------------------------------------------------
+echo '${index_html_b64}' | base64 -d > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+cat > /var/www/html/whoami.json <<EOF
+{"tier":"web","region":"$REGION","az":"$AZ","instance_id":"$IID"}
+EOF
+
+# --- Reverse proxy to the app tier ------------------------------------------
+cat > /etc/httpd/conf.d/univen-proxy.conf <<'EOF'
+ServerTokens Prod
+ServerSignature Off
+ProxyRequests Off
+ProxyTimeout 8
+
+<Proxy "balancer://appcluster">
+%{ for ip in app_ips ~}
+    BalancerMember "http://${ip}:80" retry=5 connectiontimeout=3
+%{ endfor ~}
+    ProxySet lbmethod=byrequests
+</Proxy>
+
+ProxyPass        "/api/" "balancer://appcluster/api/"
+ProxyPassReverse "/api/" "balancer://appcluster/api/"
+
+<Files "health">
+    ForceType text/plain
+</Files>
+<LocationMatch "^/(whoami\.json|api/)">
+    Header set Cache-Control "no-store"
+</LocationMatch>
+EOF
+
+systemctl enable --now httpd

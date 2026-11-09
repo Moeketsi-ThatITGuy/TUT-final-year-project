@@ -1,0 +1,101 @@
+#!/bin/bash
+# App tier bootstrap (Amazon Linux 2023)
+#   - Apache + PHP-FPM serve /api/status.php
+#   - DB credentials come from Secrets Manager in THIS region (so the backup
+#     region keeps working even when the primary region is down)
+#   - Primary region only: hourly backup of the demo table to S3 via the
+#     S3 Gateway endpoint
+set -euxo pipefail
+
+dnf install -y httpd php php-fpm php-mysqlnd php-json jq
+
+REGION="${region}"
+
+# --- Instance identity via IMDSv2 --------------------------------------------
+TOKEN=$(curl -sS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md() { curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+AZ=$(md placement/availability-zone)
+IID=$(md instance-id)
+
+install -d -m 0750 -o root -g apache /etc/univen
+
+# RDS CA bundle so PHP can verify the DB's TLS certificate
+curl -sS -o /etc/univen/rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+chmod 0644 /etc/univen/rds-ca.pem
+
+# --- DB credentials from this region's Secrets Manager -----------------------
+SECRET=""
+for i in $(seq 1 30); do
+  SECRET=$(aws secretsmanager get-secret-value --region "$REGION" \
+            --secret-id "${db_secret_name}" --query SecretString --output text) && break
+  sleep 10
+done
+
+umask 027
+echo "$SECRET" | jq --arg host "${db_host}" --arg db "${db_name}" \
+  '{host: $host, dbname: $db, username: .username, password: .password}' > /etc/univen/db.json
+chown root:apache /etc/univen/db.json
+chmod 0640 /etc/univen/db.json
+umask 022
+
+cat > /etc/univen/instance.json <<EOF
+{"tier":"app","region":"$REGION","region_label":"${region_label}","region_role":"${role}","az":"$AZ","instance_id":"$IID"}
+EOF
+chmod 0644 /etc/univen/instance.json
+
+# --- API --------------------------------------------------------------------------
+install -d /var/www/html/api
+echo '${status_php_b64}' | base64 -d > /var/www/html/api/status.php
+echo "OK" > /var/www/html/health
+
+cat > /etc/httpd/conf.d/univen-app.conf <<'EOF'
+ServerTokens Prod
+ServerSignature Off
+<Directory "/var/www/html/api">
+    Header set Cache-Control "no-store"
+</Directory>
+EOF
+
+systemctl enable --now php-fpm
+systemctl enable --now httpd
+
+%{ if is_primary ~}
+# --- Primary only: create the schema now (status.php is idempotent) ----------
+for i in $(seq 1 30); do
+  curl -sf http://127.0.0.1/api/status.php | jq -e '.db.connected == true' && break
+  sleep 10
+done
+
+# --- Primary only: hourly backup to S3 through the Gateway endpoint ----------
+echo '${backup_php_b64}' | base64 -d > /usr/local/bin/univen-backup.php
+cat > /usr/local/bin/univen-backup.sh <<'EOF'
+#!/bin/bash
+set -euo pipefail
+KEY="mysql/$(date -u +%Y-%m-%dT%H%M%SZ)-$(hostname -s).json.gz"
+php /usr/local/bin/univen-backup.php | gzip | \
+  aws s3 cp - "s3://${backup_bucket}/$KEY" --region "${region}"
+echo "backup uploaded: s3://${backup_bucket}/$KEY"
+EOF
+chmod 0750 /usr/local/bin/univen-backup.sh
+
+cat > /etc/systemd/system/univen-backup.service <<'EOF'
+[Unit]
+Description=UNIVEN demo DB backup to S3
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/univen-backup.sh
+EOF
+
+cat > /etc/systemd/system/univen-backup.timer <<'EOF'
+[Unit]
+Description=Hourly UNIVEN demo DB backup
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now univen-backup.timer
+%{ endif ~}

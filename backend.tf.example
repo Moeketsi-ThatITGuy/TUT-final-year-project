@@ -1,0 +1,13 @@
+# OPTIONAL remote state (e.g. if two people run the demo, or from CI).
+# 1. Create a private, versioned S3 bucket for state (see GitActionsLearn/bootstrap).
+# 2. Copy this file to backend.tf, fill in the bucket, then:
+#      terraform init -migrate-state
+terraform {
+  backend "s3" {
+    bucket       = "REPLACE-ME-terraform-state"
+    key          = "univen-cloud/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true # S3-native locking (Terraform 1.10+); or use dynamodb_table
+  }
+}

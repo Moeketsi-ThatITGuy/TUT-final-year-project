@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UNIVEN DR Demo - ${region_label}</title>
+<style>
+  :root { --accent: ${is_primary ? "#1b7f3b" : "#c25e00"}; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #f4f6f8; color: #1d2733; }
+  header { background: var(--accent); color: #fff; padding: 28px 24px; text-align: center; }
+  header .eyebrow { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; opacity: .9; }
+  header h1 { margin: 6px 0 4px; font-size: 44px; }
+  header .region { font-size: 20px; font-family: Menlo, Consolas, monospace; }
+  main { max-width: 960px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  section { background: #fff; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-top: 4px solid var(--accent); }
+  section h2 { margin: 0 0 12px; font-size: 18px; }
+  dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 15px; }
+  dt { color: #5a6775; }
+  dd { margin: 0; font-family: Menlo, Consolas, monospace; word-break: break-all; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-family: inherit; }
+  .ok { background: #d9f2e1; color: #135c2b; }
+  .warn { background: #ffe8cc; color: #8a4200; }
+  .bad { background: #fde2e1; color: #9b1c1c; }
+  .wide { grid-column: 1 / -1; }
+  footer { text-align: center; color: #5a6775; font-size: 13px; margin: 8px 0 32px; }
+  pre { background: #0f1720; color: #d6e2ee; padding: 12px; border-radius: 8px; overflow: auto; font-size: 12px; max-height: 260px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">UNIVEN Hybrid Cloud - Multi-Region DR Demo</div>
+  <h1>${region_label}</h1>
+  <div class="region">Served from AWS region ${region}</div>
+</header>
+
+<main>
+  <section>
+    <h2>Web server</h2>
+    <dl>
+      <dt>Region</dt><dd id="web-region">loading...</dd>
+      <dt>Availability Zone</dt><dd id="web-az">loading...</dd>
+      <dt>Instance</dt><dd id="web-iid">loading...</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>App server</h2>
+    <dl>
+      <dt>Region</dt><dd id="app-region">loading...</dd>
+      <dt>Availability Zone</dt><dd id="app-az">loading...</dd>
+      <dt>Instance</dt><dd id="app-iid">loading...</dd>
+    </dl>
+  </section>
+
+  <section class="wide">
+    <h2>Database in use</h2>
+    <dl>
+      <dt>Database region</dt><dd id="db-region">loading...</dd>
+      <dt>Role</dt><dd id="db-role">loading...</dd>
+      <dt>Endpoint</dt><dd id="db-endpoint">loading...</dd>
+      <dt>Connected</dt><dd id="db-connected">loading...</dd>
+      <dt>Replication</dt><dd id="db-repl">-</dd>
+      <dt>Rows in visits</dt><dd id="db-rows">-</dd>
+      <dt>Last row written by</dt><dd id="db-lastby">-</dd>
+      <dt>Last write at (UTC)</dt><dd id="db-lastat">-</dd>
+    </dl>
+  </section>
+
+  <section class="wide">
+    <h2>Raw API response (/api/status.php)</h2>
+    <pre id="raw">loading...</pre>
+  </section>
+</main>
+<footer>Page auto-refreshes every 10 seconds. Route 53 failover sends you here when Region 1 is unhealthy.</footer>
+
+<script>
+(function () {
+  function set(id, html) { document.getElementById(id).innerHTML = html; }
+  function esc(v) {
+    return String(v === null || v === undefined ? "-" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function badge(text, cls) { return '<span class="badge ' + cls + '">' + esc(text) + "</span>"; }
+
+  function load() {
+    fetch("/whoami.json", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (w) {
+        set("web-region", esc(w.region));
+        set("web-az", esc(w.az));
+        set("web-iid", esc(w.instance_id));
+      })
+      .catch(function () { set("web-region", badge("unavailable", "bad")); });
+
+    fetch("/api/status.php", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        var a = s.app || {}, d = s.db || {}, data = s.data || {};
+        set("app-region", esc(a.region));
+        set("app-az", esc(a.az));
+        set("app-iid", esc(a.instance_id));
+
+        var sameRegion = d.region && a.region && d.region === a.region;
+        set("db-region", badge(d.region || "unknown", sameRegion ? "ok" : "warn") +
+            (d.region === "${region}" ? " (this region)" : " (other region)"));
+        set("db-role", d.connected ? badge(d.role, d.read_only ? "warn" : "ok") : "-");
+        set("db-endpoint", esc(d.endpoint));
+        set("db-connected", d.connected ? badge("yes", "ok") : badge("no: " + (d.error || "unknown"), "bad"));
+        if (d.replication) {
+          set("db-repl", "from " + esc(d.replication.source_host) + ", lag " +
+              esc(d.replication.seconds_behind_source) + "s, IO " + esc(d.replication.io_running) +
+              ", SQL " + esc(d.replication.sql_running));
+        } else {
+          set("db-repl", d.read_only ? "-" : "source (accepts writes)");
+        }
+        set("db-rows", esc(data.total_visits));
+        set("db-lastby", esc(data.last_written_by_region));
+        set("db-lastat", esc(data.last_write_at));
+        set("raw", esc(JSON.stringify(s, null, 2)));
+      })
+      .catch(function (e) {
+        set("app-region", badge("app tier unavailable", "bad"));
+        set("raw", esc(String(e)));
+      });
+  }
+
+  load();
+  setInterval(load, 10000);
+})();
+</script>
+</body>
+</html>

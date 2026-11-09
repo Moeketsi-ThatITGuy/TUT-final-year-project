@@ -1,0 +1,21 @@
+# Terraform working files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Your local settings (may contain IPs / emails); commit the .example instead
+terraform.tfvars
+*.auto.tfvars
+backend.tf
+
+# Local logs / OS noise
+*.log
+.DS_Store
