@@ -7,9 +7,9 @@
 
 | Metric | Measured in rehearsal |
 |---|---|
-| RTO (failover) | **~34 s** from outage to DNS answering with the backup |
+| RTO (failover) | **~35–75 s** from outage to DNS answering with the backup (34 s and ≤75 s in two rehearsals) |
 | RPO (data loss) | **~seconds** (asynchronous replication lag) |
-| Failback | **Automatic**, ~25–55 s after Region 1 is healthy |
+| Failback | **Automatic**, ~25–55 s after Region 1's instances are running (~1.5 min from running `restore.sh`) |
 | Trade-off | Backup region is **read-only** until someone promotes the replica |
 
 ---
@@ -65,7 +65,7 @@ Increase the terminal font size so the back row can read it.
 | 5 | 1 min | Terminal 1 | "This asks Route 53 directly which region it's sending users to. Right now: Region 1." |
 | 6 | **Disaster** | Terminal 2: `scripts/simulate-failure.sh` | "I'm taking Region 1's web tier down. This simulates a regional outage." |
 | 7 | ~1 min | Tab 3 while waiting | "Route 53 checks from multiple locations every 10 s. Two failures in a row and it marks the region unhealthy." Show the health check dropping and the alarm firing. |
-| 8 | 30 s | Terminal 1 flips | "There: DNS now answers with **BACKUP (us-west-2)**, and the DB shows **us-west-2 / READ REPLICA**. That's about 30–40 seconds of RTO with no human involved." |
+| 8 | 30 s | Terminal 1 flips | "There: DNS now answers with **BACKUP (us-west-2)**, and the DB shows **us-west-2 / READ REPLICA**. That's roughly a minute of RTO with no human involved." |
 | 9 | 30 s | Refresh tab 1 (times out), then tab 2 | "Region 1 is dead; the backup is serving, with the data that was replicated before the outage." |
 | 10 | **Recovery** | Terminal 2: `scripts/restore.sh` | "Region 1 is back. Watch: nobody touches DNS." |
 | 11 | ~1–2 min | Terminal 1 flips back | "Automatic failback. And because only Region 1 ever accepted writes, there's nothing to merge." |
